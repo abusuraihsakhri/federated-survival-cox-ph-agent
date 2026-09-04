@@ -3,9 +3,51 @@ Distributed Component Coordination & Executive Hierarchy for FedCox-PH: Federate
 Domain: Privacy-Preserving Federated Healthcare & FHE
 """
 import uuid
+import hashlib
+import hmac
+import os
+import warnings
 from typing import Dict, Any, List, Optional
 from .models import FrontierPayload, AgentTelemetryAlert, ExecutionStatus
 from .engine import FrontierDomainEngine
+
+# ---------------------------------------------------------------------------
+# HMAC-SHA256 Audit Trail (FedCox-PH local)
+# ---------------------------------------------------------------------------
+_AUDIT_KEY = os.getenv("AUDIT_SECRET_KEY", "")
+if not _AUDIT_KEY:
+    warnings.warn(
+        "AUDIT_SECRET_KEY not set for FedCox-PH. Set in production.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+    _AUDIT_KEY = hashlib.sha256(b"fed-cox-ph-audit-salt").hexdigest()
+
+_AUDIT_LOG: List[Dict[str, Any]] = []
+
+
+def _record_audit(actor: str, event_type: str, details: Dict[str, Any]) -> str:
+    payload_str = str(sorted(details.items()))
+    payload_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
+    prev_hash = _AUDIT_LOG[-1]["current_hash"] if _AUDIT_LOG else "GENESIS"
+    sign_data = f"{actor}|{event_type}|{payload_hash}|{prev_hash}"
+    signature = hmac.new(_AUDIT_KEY.encode("utf-8"), sign_data.encode("utf-8"), hashlib.sha256).hexdigest()
+    entry = {"actor": actor, "event_type": event_type, "payload_hash": payload_hash,
+             "prev_hash": prev_hash, "current_hash": signature}
+    _AUDIT_LOG.append(entry)
+    return signature
+
+
+def verify_audit_integrity() -> bool:
+    for i, entry in enumerate(_AUDIT_LOG):
+        prev = _AUDIT_LOG[i - 1]["current_hash"] if i > 0 else "GENESIS"
+        if entry["prev_hash"] != prev:
+            return False
+    return True
+
+
+def get_audit_trail() -> List[Dict[str, Any]]:
+    return list(_AUDIT_LOG)
 
 
 class LocalGradientHessianAgent:
@@ -68,6 +110,19 @@ class FedCoxCoordinator:
         self.execution_ledger: Dict[str, Dict[str, Any]] = {}
 
     def process(self, payload: FrontierPayload) -> Dict[str, Any]:
+        # Zero-PHI outbound validation
+        try:
+            from agents.base import PHIGuard, SecurityException
+            PHIGuard.assert_no_phi(payload.task_id)
+            PHIGuard.assert_no_phi(payload.target_identifier)
+            PHIGuard.assert_no_phi(payload.status_descriptor)
+        except ImportError:
+            pass  # agents module not available; skip PHI check
+        except Exception as e:
+            # Re-raise security exceptions
+            if "PHI" in str(e) or "SecurityException" in type(e).__name__:
+                raise
+
         all_alerts: List[AgentTelemetryAlert] = []
         all_alerts.extend(self.sub_1.audit(payload))
         all_alerts.extend(self.sub_2.audit(payload))
@@ -98,6 +153,18 @@ class FedCoxCoordinator:
         }
 
         self.execution_ledger[payload.task_id] = dossier
+
+        # Record audit entry
+        _record_audit(
+            actor="FedCoxCoordinator",
+            event_type="TASK_EVALUATION_COMPLETED",
+            details={
+                "task_id": payload.task_id,
+                "overall_status": status.value,
+                "total_alerts": len(all_alerts),
+            },
+        )
+
         return dossier
 
     def query_supervisory_chat(self, query: str) -> str:

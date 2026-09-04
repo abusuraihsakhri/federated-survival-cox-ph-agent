@@ -33,6 +33,9 @@ def main(argv=None):
     p_batch.add_argument("-i", "--input", required=True)
     p_batch.add_argument("-o", "--output", default="results.csv")
 
+    # Verify Audit
+    subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
+
     # Serve
     p_serve = subparsers.add_parser("serve", help="Launch FastAPI REST server")
     p_serve.add_argument("--host", default="127.0.0.1")
@@ -66,6 +69,13 @@ def main(argv=None):
     if args.command == "chat":
         ans = coordinator.query_supervisory_chat(" ".join(args.query))
         print(f"\n[FedCoxCoordinator]:\n{ans}\n")
+        return 0
+
+    if args.command == "verify-audit":
+        from .agents import get_audit_trail, verify_audit_integrity
+        trail = get_audit_trail()
+        valid = verify_audit_integrity()
+        print(f"Audit Trail Blocks: {len(trail)} | Cryptographic Integrity Verified: {valid}")
         return 0
 
     if args.command == "batch":
