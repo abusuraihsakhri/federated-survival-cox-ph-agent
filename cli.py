@@ -8,8 +8,21 @@ import sys
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
 from agents.base import AuditLogger
+from fed_cox_ph.cox import CoxSite, fit_federated_cox
 
 supervisor = SystemSupervisor(model_provider="mock")
+
+
+def parse_csv_bool(value: object) -> bool:
+    """Parse a boolean column without treating 'False' as truthy."""
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().lower()
+    if normalized in {"true", "1", "yes", "y", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "off", ""}:
+        return False
+    raise ValueError(f"Invalid is_critical_flag: {value!r}")
 
 
 def main(argv=None):
@@ -33,6 +46,11 @@ def main(argv=None):
     p_batch = subparsers.add_parser("batch", help="Batch process CSV records")
     p_batch.add_argument("-i", "--input", required=True)
     p_batch.add_argument("-o", "--output", default="results.csv")
+
+    # In-process multi-site Cox model demonstration (not a network federation).
+    p_cox = subparsers.add_parser("fit-cox", help="Fit Breslow Cox PH from local site CSV files")
+    p_cox.add_argument("--site", action="append", required=True, help="Per-site CSV with time,event,cov_* columns; repeat per site")
+    p_cox.add_argument("--ridge", type=float, default=0.0, help="Optional L2 penalty")
 
     # Verify Audit
     subparsers.add_parser("verify-audit", help="Verify HMAC audit trail integrity")
@@ -85,7 +103,7 @@ def main(argv=None):
             fieldnames = list(reader.fieldnames or [])
             rows = list(reader)
 
-        out_fields = fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]
+        out_fields = list(dict.fromkeys(fieldnames + ["overall_urgency", "integrity_status", "total_alerts", "audit_hash"]))
         out_rows = []
         for r in rows:
             payload = SystemTaskPayload(
@@ -94,7 +112,7 @@ def main(argv=None):
                 primary_metric=float(r.get("primary_metric", 15.0)),
                 secondary_metric=float(r.get("secondary_metric", 5.0)),
                 status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
+                is_critical_flag=parse_csv_bool(r.get("is_critical_flag", False)),
             )
             dossier = supervisor.process_task(payload)
             row_dict = dict(r)
@@ -110,6 +128,35 @@ def main(argv=None):
             writer.writerows(out_rows)
         print(f"Processed {len(out_rows)} records -> {args.output}")
         return 0
+
+    if args.command == "fit-cox":
+        sites = []
+        expected_covariates = None
+        for site_path in args.site:
+            with open(site_path, encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                headers = reader.fieldnames or []
+                covariates = [name for name in headers if name.startswith("cov_")]
+                if not {"time", "event"}.issubset(headers) or not covariates:
+                    raise ValueError(f"{site_path}: require time, event and cov_* columns")
+                if expected_covariates is None:
+                    expected_covariates = covariates
+                elif covariates != expected_covariates:
+                    raise ValueError("all sites must have identical ordered cov_* columns")
+                records = []
+                for row in reader:
+                    records.append({
+                        "time": row["time"],
+                        "event": int(row["event"]),
+                        "covariates": [row[name] for name in covariates],
+                        "stratum": row.get("stratum") or "all",
+                    })
+                sites.append(CoxSite(records))
+        result = fit_federated_cox(sites, ridge=args.ridge)
+        output = result.to_dict()
+        output["covariates"] = expected_covariates
+        print(json.dumps(output, indent=2))
+        return 0 if result.converged else 2
 
     if args.command == "serve":
         import uvicorn

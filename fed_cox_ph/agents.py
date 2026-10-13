@@ -7,6 +7,9 @@ import hashlib
 import hmac
 import os
 import warnings
+import secrets
+import json
+import copy
 from typing import Dict, Any, List, Optional
 from .models import FrontierPayload, AgentTelemetryAlert, ExecutionStatus
 from .engine import FrontierDomainEngine
@@ -14,24 +17,24 @@ from .engine import FrontierDomainEngine
 # ---------------------------------------------------------------------------
 # HMAC-SHA256 Audit Trail (FedCox-PH local)
 # ---------------------------------------------------------------------------
-_AUDIT_KEY = os.getenv("AUDIT_SECRET_KEY", "")
+_AUDIT_KEY = os.getenv("AUDIT_SECRET_KEY", "").encode("utf-8")
 if not _AUDIT_KEY:
     warnings.warn(
-        "AUDIT_SECRET_KEY not set for FedCox-PH. Set in production.",
+        "AUDIT_SECRET_KEY not set for FedCox-PH; using process-local random audit key.",
         RuntimeWarning,
         stacklevel=1,
     )
-    _AUDIT_KEY = hashlib.sha256(b"fed-cox-ph-audit-salt").hexdigest()
+    _AUDIT_KEY = secrets.token_bytes(32)
 
 _AUDIT_LOG: List[Dict[str, Any]] = []
 
 
 def _record_audit(actor: str, event_type: str, details: Dict[str, Any]) -> str:
-    payload_str = str(sorted(details.items()))
+    payload_str = json.dumps(details, sort_keys=True, separators=(",", ":"))
     payload_hash = hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
     prev_hash = _AUDIT_LOG[-1]["current_hash"] if _AUDIT_LOG else "GENESIS"
     sign_data = f"{actor}|{event_type}|{payload_hash}|{prev_hash}"
-    signature = hmac.new(_AUDIT_KEY.encode("utf-8"), sign_data.encode("utf-8"), hashlib.sha256).hexdigest()
+    signature = hmac.new(_AUDIT_KEY, sign_data.encode("utf-8"), hashlib.sha256).hexdigest()
     entry = {"actor": actor, "event_type": event_type, "payload_hash": payload_hash,
              "prev_hash": prev_hash, "current_hash": signature}
     _AUDIT_LOG.append(entry)
@@ -39,15 +42,23 @@ def _record_audit(actor: str, event_type: str, details: Dict[str, Any]) -> str:
 
 
 def verify_audit_integrity() -> bool:
-    for i, entry in enumerate(_AUDIT_LOG):
-        prev = _AUDIT_LOG[i - 1]["current_hash"] if i > 0 else "GENESIS"
-        if entry["prev_hash"] != prev:
+    prev = "GENESIS"
+    for entry in _AUDIT_LOG:
+        try:
+            if entry["prev_hash"] != prev:
+                return False
+            data = f'{entry["actor"]}|{entry["event_type"]}|{entry["payload_hash"]}|{entry["prev_hash"]}'
+            expected = hmac.new(_AUDIT_KEY, data.encode("utf-8"), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(entry["current_hash"], expected):
+                return False
+            prev = entry["current_hash"]
+        except (KeyError, TypeError, AttributeError):
             return False
     return True
 
 
 def get_audit_trail() -> List[Dict[str, Any]]:
-    return list(_AUDIT_LOG)
+    return copy.deepcopy(_AUDIT_LOG)
 
 
 class LocalGradientHessianAgent:
@@ -110,18 +121,11 @@ class FedCoxCoordinator:
         self.execution_ledger: Dict[str, Dict[str, Any]] = {}
 
     def process(self, payload: FrontierPayload) -> Dict[str, Any]:
-        # Zero-PHI outbound validation
-        try:
-            from agents.base import PHIGuard, SecurityException
-            PHIGuard.assert_no_phi(payload.task_id)
-            PHIGuard.assert_no_phi(payload.target_identifier)
-            PHIGuard.assert_no_phi(payload.status_descriptor)
-        except ImportError:
-            pass  # agents module not available; skip PHI check
-        except Exception as e:
-            # Re-raise security exceptions
-            if "PHI" in str(e) or "SecurityException" in type(e).__name__:
-                raise
+        # Validate all outbound fields; never suppress validation failures.
+        from agents.base import PHIGuard
+        for value in (payload.task_id, payload.target_identifier, payload.status_descriptor):
+            PHIGuard.assert_no_phi(value)
+        PHIGuard.assert_no_phi(json.dumps(payload.attributes, default=str))
 
         all_alerts: List[AgentTelemetryAlert] = []
         all_alerts.extend(self.sub_1.audit(payload))
