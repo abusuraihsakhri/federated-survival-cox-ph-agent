@@ -108,3 +108,15 @@ def test_csv_boolean_parse(raw, expected):
 def test_csv_boolean_rejects_unknown():
     with pytest.raises(ValueError, match="Invalid"):
         parse_csv_bool("maybe")
+
+def test_cox_cli_sample_files(capsys):
+    from pathlib import Path
+    from cli import main
+    base = Path(__file__).resolve().parents[1]
+    assert main(["fit-cox", "--site", str(base / "sample_cox_site_a.csv"),
+                 "--site", str(base / "sample_cox_site_b.csv")]) == 0
+    import json
+    result = json.loads(capsys.readouterr().out)
+    assert result["converged"] is True
+    assert result["coefficients"][0] == pytest.approx(1.4791397, abs=2e-5)
+    assert result["covariates"] == ["cov_exposure"]
