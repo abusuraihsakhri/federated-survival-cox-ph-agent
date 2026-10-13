@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "federated-survival-cox-ph-engine"
+name = "federated-survival-cox-ph-agent"
 version = "2.0.0"
 description = "FedCox-PH: Federated Stratified Cox Proportional Hazards Regression Engine"
 readme = "README.md"
@@ -16,12 +16,17 @@ classifiers = [
     "Topic :: Security/Cryptography",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-requires-python = ">=3.9"
-dependencies = []
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2,<3"]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.100,<1", "uvicorn>=0.23,<1"]
+test = ["pytest>=8,<10"]
 
 [project.scripts]
-federated-survival-cox-ph-engine = "fed_cox_ph.cli:main"
+federated-survival-cox-ph-agent = "cli:main"
+fed-cox-ph-legacy = "fed_cox_ph.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-engine"
-Repository = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-engine.git"
+Repository = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-agent.git"
