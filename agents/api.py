@@ -15,8 +15,8 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Federated Survival Cox Ph Agent API",
-    description="Enterprise Distributed Component Platform (Privacy-Preserving Federated Healthcare & FHE)",
-    version="3.0.0-ENTERPRISE",
+    description="Deterministic rule-based task audit API; not a federated Cox estimator",
+    version="2.0.0",
 )
 
 
@@ -26,7 +26,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "federated-survival-cox-ph-agent", "domain": "Privacy-Preserving Federated Healthcare & FHE", "standard": "HIPAA Safe Harbor §164.514 / Google SecAgg Standards", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "federated-survival-cox-ph-agent", "domain": "Illustrative rule-based task audit", "standard": "Demonstration thresholds; no clinical validation", "version": "2.0.0"}
 
 
 @app.get("/metrics")
