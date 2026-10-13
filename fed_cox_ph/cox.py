@@ -186,6 +186,7 @@ def fit_federated_cox(sites: Sequence[CoxSite], *, max_iterations: int = 100,
     iterations = 0
     for iteration in range(1, max_iterations + 1):
         value, gradient, information = objective(beta)
+        _solve(information, [0.0] * p)  # Reject unidentifiable models even when score is zero.
         if max(abs(x) for x in gradient) < tolerance:
             converged = True
             iterations = iteration - 1
