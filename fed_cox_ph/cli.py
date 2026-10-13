@@ -11,6 +11,18 @@ from .agents import FedCoxCoordinator
 coordinator = FedCoxCoordinator()
 
 
+def parse_csv_bool(value: object) -> bool:
+    """Parse a boolean column without treating 'False' as truthy."""
+    if isinstance(value, bool):
+        return value
+    normalized = str(value or "").strip().lower()
+    if normalized in {"true", "1", "yes", "y", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "off", ""}:
+        return False
+    raise ValueError(f"Invalid is_critical_flag: {value!r}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="federated-survival-cox-ph-agent", description="FedCox-PH: Federated Stratified Cox Proportional Hazards Regression Agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -84,7 +96,7 @@ def main(argv=None):
             fieldnames = list(reader.fieldnames or [])
             rows = list(reader)
 
-        out_fields = fieldnames + ["overall_status", "total_alerts", "critical_count", "consensus_summary"]
+        out_fields = list(dict.fromkeys(fieldnames + ["overall_status", "total_alerts", "critical_count", "consensus_summary"]))
         out_rows = []
         for r in rows:
             payload = FrontierPayload(
@@ -93,7 +105,7 @@ def main(argv=None):
                 primary_metric=float(r.get("primary_metric", 15.0)),
                 secondary_metric=float(r.get("secondary_metric", 5.0)),
                 status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
+                is_critical_flag=parse_csv_bool(r.get("is_critical_flag", False)),
             )
             dossier = coordinator.process(payload)
             row_dict = dict(r)
