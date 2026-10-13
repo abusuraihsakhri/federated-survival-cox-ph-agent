@@ -32,3 +32,18 @@ jobs:
         run: |
           federated-survival-cox-ph-agent --help
           fed-cox-ph-legacy --help
+      - name: Docker build and HTTP smoke test
+        if: matrix.python-version == '3.12'
+        run: |
+          docker build --tag fedcox-local:test .
+          docker run --name fedcox-ci --detach \
+            --publish 127.0.0.1:8012:8000 \
+            --env AUDIT_SECRET_KEY=ci-ephemeral-testing-key \
+            fedcox-local:test
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:8012/health; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:8012/ > /dev/null
+          docker logs fedcox-ci
+          docker rm -f fedcox-ci
