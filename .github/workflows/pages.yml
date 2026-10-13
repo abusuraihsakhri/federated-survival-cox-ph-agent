@@ -24,3 +24,14 @@ jobs:
           path: web
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify deployed index and JavaScript
+        run: |
+          url="${{ steps.deployment.outputs.page_url }}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --location --silent "${url}" > /tmp/pages-index.html; then
+              break
+            fi
+            sleep 3
+          done
+          grep -q "Rule-based task audit" /tmp/pages-index.html
+          curl --fail --location --silent "${url%/}/app.js" | grep -q "function evaluate(data)"
