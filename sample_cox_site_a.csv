@@ -1,0 +1,5 @@
+time,event,cov_exposure,stratum
+1,1,0,all
+1,1,1,all
+2,0,0,all
+3,1,1,all
