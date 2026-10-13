@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "federated-survival-cox-ph-agent"
+name = "federated-survival-cox-ph-engine"
 version = "2.0.0"
-description = "FedCox-PH: Federated Stratified Cox Proportional Hazards Regression Engine"
+description = "Rule-based task auditing and an experimental aggregated Cox PH estimator"
 readme = "README.md"
 authors = [{ name = "Dr. Abu Suraih Sakhri", email = "abusuraih@example.com" }]
 license = { text = "MIT" }
@@ -28,5 +28,11 @@ federated-survival-cox-ph-agent = "cli:main"
 fed-cox-ph-legacy = "fed_cox_ph.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-engine"
+Homepage = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-agent"
 Repository = "https://github.com/abusuraihsakhri/federated-survival-cox-ph-agent.git"
+
+[tool.setuptools]
+py-modules = ["cli", "simulator", "enrichment", "fed_cox_ph_app"]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "fed_cox_ph*"]
