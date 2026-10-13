@@ -1,171 +1,71 @@
 # Federated Survival Cox PH Agent
 
-> **Domain:** Privacy-Preserving Healthcare & Federated Computing  
-> **Reference Guidelines & Standards:** `HIPAA Safe Harbor §164.514 & Differential Privacy RDP`
+A Python research prototype containing two distinct tools: an **experimental stratified Cox proportional hazards estimator** based on site-aggregated risk-set statistics, and a **deterministic rule-based task auditor** accessible through CLI, REST API, or a static browser interface.
 
-<div align="center">
+**Scope:** The estimator uses Breslow handling of tied events and damped Newton–Raphson updates. It simulates multiple sites within one Python process; it does **not** implement a distributed network protocol, secure aggregation, homomorphic encryption, differential privacy, variance estimation, or proportional-hazards diagnostics. The rule-based task audit is **not** a Cox model and its thresholds are illustrative rather than validated clinical cutoffs.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+## Run the browser demonstration
 
-</div>
+Open `web/index.html` in a browser, or serve the repository locally using the instructions below. The standalone browser application performs only the rule-based audit and works without a backend.
 
----
+The GitHub Pages publication workflow uploads the `web/` directory on changes to `master`, **provided Pages is enabled with GitHub Actions as its build source**. A public deployment URL should be published only after the Pages deployment and main browser workflow have been verified.
 
-## 📖 What It Does
+## Install and run
 
-**Federated Survival Cox PH Agent** is an advanced analytical and computational platform implementing Decentralized Newton-Raphson stratified Cox proportional hazards regression agent.
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-- **Deterministic Calculation Engine**: Strict compliance with standard reference formulations and thresholds.
-- **Risk & Urgency Classification**: Multi-tier categorization with automated clinical/operational action recommendations.
-- **Validation & Guardrails**: Rigorous input bounds checking and anomaly detection.
-- **Federated Stratified Cox PH Regression**: Distributed Newton-Raphson optimization across siloed healthcare centers.
-
----
-
-## 💻 CLI Quickstart & Usage
-
-### Installation
-```bash
-pip install -e .
-```
-
-### Single Task Evaluation
-```bash
-python cli.py audit --task-id TASK-001 --target KEY-01 --primary 28.5 --secondary 14.2 --critical --status DISCORDANT
-```
-
-### Batch Processing
-```bash
-python cli.py batch -i sample.csv -o results.csv
-```
-
-### Supervisory Chat
-```bash
-python cli.py chat "What is the system status?"
-```
-
-### Verify Audit Trail Integrity
-```bash
-python cli.py verify-audit
-```
-
-### Start REST API Server
-```bash
-python cli.py serve --host 127.0.0.1 --port 8000
-```
-
-### Parameter Reference
-| Argument | Description | Default |
-|:---------|:------------|:--------|
-| `--task-id` | Unique task/case identifier | `TASK-2026-001` |
-| `--target` | Entity, patient key, or target | `KEY-TARGET-01` |
-| `--primary` | Primary domain measurement | `28.5` |
-| `--secondary` | Secondary kinetic/confidence score | `14.2` |
-| `--critical` | Emergency escalation flag | `False` |
-| `--status` | Status code or phenotype descriptor | `DISCORDANT` |
-
-### Input Data Schema (CSV)
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `task_id` | Unique task/case identifier | Required |
-| `target_identifier` | Entity or target key | Required |
-| `primary_metric` | Primary domain measurement | Required |
-| `secondary_metric` | Secondary kinetic/confidence score | Required |
-| `is_critical_flag` | Emergency escalation flag | Required |
-| `status_descriptor` | Status code or phenotype descriptor | Required |
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active regex inspection blocking SSNs, MRNs, phone numbers, emails, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
-### Security Configuration
-
-Set the `AUDIT_SECRET_KEY` environment variable in production:
+Requires Python 3.10 or later.
 
 ```bash
-# Linux/macOS
-export AUDIT_SECRET_KEY="your-secure-random-key"
-
-# Windows
-set AUDIT_SECRET_KEY=your-secure-random-key
+python -m pip install -e ".[server,test]"
+python -m pytest -q
+federated-survival-cox-ph-agent audit --task-id DEMO-01 --target KEY-01 --primary 28.5 --secondary 14.2 --status DISCORDANT
+federated-survival-cox-ph-agent batch -i sample.csv -o results.csv
+federated-survival-cox-ph-agent verify-audit
+federated-survival-cox-ph-agent serve --host 127.0.0.1 --port 8000
 ```
 
----
+The server offers `/` (browser console), `/health`, `/metrics`, `/api/audit`, `/api/chat`, and `/api/audit/logs`. The CLI also exposes a compatibility entry point `fed-cox-ph-legacy` for the alternate auditor.
 
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+### Experimental Cox model
 
 ```bash
-pytest -v
+federated-survival-cox-ph-agent fit-cox \
+  --site sample_cox_site_a.csv \
+  --site sample_cox_site_b.csv
 ```
 
-Execute high-throughput batch simulation benchmarks:
+Each site CSV must have `time` (nonnegative follow-up time), `event` (0/1), and one or more numeric `cov_*` columns in the **same order** across sites. An optional `stratum` column specifies a separate baseline hazard. Each `--site` file represents one simulated site. An optional `--ridge 0.1` applies L2 penalization; coefficients and hazard ratios are returned as JSON, including convergence status. Invalid, nonfinite, and unidentifiable models are rejected where detectable.
+
+All site files are read on the same host, and individual observations remain in the site objects during fitting. Site-level event schedules, risk-score maxima, and first/second risk moments are exposed to the coordinator. **These aggregates may reveal sensitive information**, particularly with small risk sets. Do not use identifiable patient data or interpret the implementation as a privacy-preserving distributed deployment.
+
+The model has numerical regression tests comparing its results to a separately evaluated pooled Breslow partial likelihood. Additional validation, uncertainty estimates, PH-assumption checks, federated transport, and disclosure controls are required before research production use.
+
+## Auditor
+
+The audit workflow evaluates arbitrary numeric metrics using predefined illustration thresholds (primary `>25`, secondary `>12` for the main supervisor), a critical flag, and anomaly keywords. It returns a structured assessment; the labels and remediation statements are *not clinical guidance*. CSV batch fields are `task_id,target_identifier,primary_metric,secondary_metric,status_descriptor,is_critical_flag`. The boolean column accepts `true/false`, `1/0`, and `yes/no` (case-insensitive).
+
+In the browser, computation stays within the page and JSON reports can be downloaded. No browser-side HMAC audit signatures or invented API fallbacks are produced.
+
+## Security and privacy limitations
+
+- Text-pattern checks reject some common identifiers but cannot establish de-identification, HIPAA compliance, or comprehensive PHI detection. **Use synthetic, non-sensitive inputs.**
+- Audit entries are HMAC-SHA256 chained and verification recomputes every signature; entries remain in memory and are lost on restart. Set a strong `AUDIT_SECRET_KEY` to use a stable signing key. Without it, the program generates a random process-local signing key.
+- The REST server has **no user authentication**. Bind to a local interface or protect it behind an authenticated gateway. The example Docker Compose configuration binds port 8000 to loopback.
+- Other modules under `enrichment.py` are rule-based status prototypes, **not** implementations of secure multiparty computation, differential privacy, formal Rényi accounting, or Byzantine-resistant inference.
+- The mock language-model adapter returns deterministic placeholder responses; it does not contact hosted models or perform clinical reasoning.
+
+## Container
 
 ```bash
-python simulator.py 1000
+export AUDIT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+docker compose up --build
 ```
 
----
+The container runs as a non-root user. For manual Docker invocation, bind to `127.0.0.1:8000:8000` and pass a secure signing key via an environment variable.
 
-## 🐳 Container Deployment
+## Development
 
-### Docker
-```bash
-docker build -t federated-survival-cox-ph-agent .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secure-key federated-survival-cox-ph-agent
-```
+Run `python -m pytest -q`, `node --check web/app.js`, and `node --test web/app.test.cjs`. GitHub Actions tests Python 3.10–3.12 and the browser evaluation logic. The runtime uses Pydantic 2; FastAPI and Uvicorn are optional server dependencies. The browser requires modern JavaScript support and works on desktop or mobile.
 
-### Docker Compose
-```bash
-# Create .env file with your secure key
-echo "AUDIT_SECRET_KEY=your-secure-key" > .env
+## License
 
-# Start the service
-docker compose up -d
-```
-
----
-
-## 📁 Project Structure
-
-```
-federated-survival-cox-ph-agent/
-├── agents/                  # Core agent modules (supervisor, workers, PHI guard)
-│   ├── api.py              # FastAPI REST endpoints
-│   ├── base.py             # Security, PHI guard, HMAC audit trail
-│   ├── models.py           # Pydantic data models
-│   ├── supervisor.py       # Master orchestrator
-│   ├── workers.py          # Specialized domain workers
-│   └── ...
-├── fed_cox_ph/             # Federated Cox PH regression engine
-│   ├── agents.py           # Sub-agents and coordinator
-│   ├── engine.py           # Core algorithmic engine
-│   ├── models.py           # Data models
-│   ├── cli.py              # CLI interface
-│   └── server.py           # FastAPI server factory
-├── tests/                  # Pytest test suite
-├── web/                    # Operations console (HTML/JS)
-├── cli.py                  # Main CLI entry point
-├── simulator.py            # High-throughput simulation
-├── enrichment.py           # Additional domain features
-├── Dockerfile              # Container definition
-├── docker-compose.yml      # Multi-container orchestration
-└── pyproject.toml          # Project metadata and dependencies
-```
+MIT — see [LICENSE](LICENSE).
