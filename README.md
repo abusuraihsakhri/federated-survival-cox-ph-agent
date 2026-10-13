@@ -1,5 +1,7 @@
 # Federated Survival Cox PH Agent
 
+### [Open the Live Application →](https://abusuraihsakhri.github.io/federated-survival-cox-ph-agent/)
+
 A Python research prototype containing two distinct tools: an **experimental stratified Cox proportional hazards estimator** based on site-aggregated risk-set statistics, and a **deterministic rule-based task auditor** accessible through CLI, REST API, or a static browser interface.
 
 **Scope:** The estimator uses Breslow handling of tied events and damped Newton–Raphson updates. It simulates multiple sites within one Python process; it does **not** implement a distributed network protocol, secure aggregation, homomorphic encryption, differential privacy, variance estimation, or proportional-hazards diagnostics. The rule-based task audit is **not** a Cox model and its thresholds are illustrative rather than validated clinical cutoffs.
@@ -8,7 +10,7 @@ A Python research prototype containing two distinct tools: an **experimental str
 
 Open `web/index.html` in a browser, or serve the repository locally using the instructions below. The standalone browser application performs only the rule-based audit and works without a backend.
 
-The GitHub Pages publication workflow uploads the `web/` directory on changes to `master`, **provided Pages is enabled with GitHub Actions as its build source**. A public deployment URL should be published only after the Pages deployment and main browser workflow have been verified.
+The GitHub Pages publication workflow deploys `web/` on changes to `master` and performs HTTPS smoke tests against the published HTML and JavaScript.
 
 ## Install and run
 
